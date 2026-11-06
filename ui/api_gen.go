@@ -7013,6 +7013,19 @@ func (_handle Element) Submitted() bool {
 	return _node.Submitted()
 }
 
+// SubmittedMods reports, as Submitted does, whether Enter was pressed in a
+// single-line text input, and the modifiers held with it, for Shift+Enter
+// to go back where Enter goes forward, as FindBar does.
+func (_handle Element) SubmittedMods() (Modifiers, bool) {
+	_node := _handle.node()
+	if _node == nil {
+		return 0, false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.SubmittedMods()
+}
+
 // TabSize puts the tab stops of the element's text every n spaces of its
 // font from the start of each line, as CSS's tab-size: a tab advances
 // to the next of them, as a code block indents with tabs of 2 or 4

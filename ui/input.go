@@ -1697,6 +1697,16 @@ func (e *node) Submitted() bool {
 	return e.st.submitted
 }
 
+// SubmittedMods reports, as Submitted does, whether Enter was pressed in a
+// single-line text input, and the modifiers held with it, for Shift+Enter
+// to go back where Enter goes forward, as FindBar does.
+func (e *node) SubmittedMods() (Modifiers, bool) {
+	if !e.Submitted() {
+		return 0, false
+	}
+	return e.st.submitMods, true
+}
+
 // Dismissed reports whether pressing Escape or clicking outside closed the
 // dialog or popover (Modal, DialogBase, Popover, PopoverBase) returning the
 // element, in the frame it did, setting its *open to false: one that must
