@@ -433,9 +433,15 @@ func (t *Terminal) ScrollToRow(row int) {
 }
 
 // CellAt returns the cell at column x of row y of the viewport.
-func (t *Terminal) CellAt(x, y int) (GridRef, bool) {
+func (t *Terminal) CellAt(x, y int) (GridRef, bool) { return t.cellAt(pointViewport, x, y) }
+
+// ScreenCellAt returns the cell at column x of row y of the screen and its
+// scrollback, row 0 the oldest, as ScreenRow counts them.
+func (t *Terminal) ScreenCellAt(x, y int) (GridRef, bool) { return t.cellAt(pointScreen, x, y) }
+
+func (t *Terminal) cellAt(tag int32, x, y int) (GridRef, bool) {
 	ref := GridRef{size: unsafe.Sizeof(GridRef{})}
-	p := point{tag: 1, x: uint16(max(0, min(x, 0xFFFF))), y: uint32(max(y, 0))}
+	p := point{tag: tag, x: uint16(max(0, min(x, 0xFFFF))), y: uint32(max(y, 0))}
 	return ref, terminalGridRef(t.h, p, &ref) == 0
 }
 
@@ -448,11 +454,17 @@ func (t *Terminal) SetResizePullBack(v bool) {
 
 // RowText returns the text of row y of the viewport, and the column of
 // each of its runes.
-func (t *Terminal) RowText(y int) (text []rune, cols []int) {
+func (t *Terminal) RowText(y int) (text []rune, cols []int) { return t.rowText(pointViewport, y) }
+
+// ScreenRowText returns the text of row y of the screen and its
+// scrollback, row 0 the oldest, as RowText does of the viewport.
+func (t *Terminal) ScreenRowText(y int) (text []rune, cols []int) { return t.rowText(pointScreen, y) }
+
+func (t *Terminal) rowText(tag int32, y int) (text []rune, cols []int) {
 	c, _ := t.Size()
 	var buf [16]uint32
 	for x := range c {
-		ref, found := t.CellAt(x, y)
+		ref, found := t.cellAt(tag, x, y)
 		if !found {
 			break
 		}
@@ -489,8 +501,15 @@ const (
 
 // Row returns how row y of the viewport belongs to a shell's prompt, and
 // whether it soft-wraps into the next.
-func (t *Terminal) Row(y int) (prompt RowPrompt, wrap bool) {
-	ref, found := t.CellAt(0, y)
+func (t *Terminal) Row(y int) (prompt RowPrompt, wrap bool) { return t.row(pointViewport, y) }
+
+// ScreenRowPrompt returns how row y of the screen and its scrollback, row
+// 0 the oldest, belongs to a shell's prompt, and whether it soft-wraps into
+// the next, as Row does of the viewport.
+func (t *Terminal) ScreenRowPrompt(y int) (prompt RowPrompt, wrap bool) { return t.row(pointScreen, y) }
+
+func (t *Terminal) row(tag int32, y int) (prompt RowPrompt, wrap bool) {
+	ref, found := t.cellAt(tag, 0, y)
 	if !found {
 		return NoPrompt, false
 	}

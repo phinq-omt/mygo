@@ -10,6 +10,13 @@ import (
 // whole prompt on SIGWINCH; the final C leaves the initial screen unmarked.
 const promptRedraw = "\x1b]133;A;redraw=1\a\x1b]133;C\a"
 
+// ZshIntegration returns env for a zsh that marks its prompts and commands
+// with OSC 133, as Options.ShellIntegration has a local zsh do, for a
+// program that starts the shell itself and connects it with Conn. Its user
+// startup files are sourced as they would be. dir holds the startup file
+// that installs the marks, for the caller to remove once the shell ended.
+func ZshIntegration(env []string) (_ []string, dir string, _ error) { return zshEnvironment(env) }
+
 func zshEnvironment(env []string) ([]string, string, error) {
 	dir, err := os.MkdirTemp("", "mygo-zsh-")
 	if err != nil {
