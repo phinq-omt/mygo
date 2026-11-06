@@ -54,7 +54,7 @@ var targets = []struct {
 func main() {
 	src := flag.String("src", "", "a checkout of Ghostty, at the commit (cloned into the user's cache when empty)")
 	out := flag.String("out", "build", "the directory of the libraries")
-	release := flag.String("release", "https://github.com/egoist/mygo/releases/download/libghostty-vt-"+commit[:12], "the URL of the release hosting the libraries")
+	release := flag.String("release", "https://github.com/phinq-omt/mygo/releases/download/libghostty-vt-"+commit[:12], "the URL of the release hosting the libraries")
 	themes := flag.Bool("themes", false, "only write the themes")
 	flag.Parse()
 	if *themes {
