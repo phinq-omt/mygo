@@ -340,10 +340,26 @@ func (t *Terminal) ScrollToRow(row int) {
 	terminalScrollViewport(t.h, scrollViewport{tag: 3, value: [2]uint64{uint64(max(row, 0))}})
 }
 
+// Points of a GhosttyPoint: of the viewport, or of the screen and its
+// scrollback, whose row 0 is the oldest the terminal keeps.
+const (
+	pointViewport = 1
+	pointScreen   = 2
+)
+
+// rowDataWrap is GHOSTTY_ROW_DATA_WRAP: the row goes on in the next one.
+const rowDataWrap = 1
+
 // CellAt returns the cell at column x of row y of the viewport.
-func (t *Terminal) CellAt(x, y int) (GridRef, bool) {
+func (t *Terminal) CellAt(x, y int) (GridRef, bool) { return t.cellAt(pointViewport, x, y) }
+
+// ScreenCellAt returns the cell at column x of row y of the screen and its
+// scrollback, row 0 being the oldest; Scrollbar's Total counts the rows.
+func (t *Terminal) ScreenCellAt(x, y int) (GridRef, bool) { return t.cellAt(pointScreen, x, y) }
+
+func (t *Terminal) cellAt(tag int32, x, y int) (GridRef, bool) {
 	ref := GridRef{size: unsafe.Sizeof(GridRef{})}
-	p := point{tag: 1, x: uint16(max(0, min(x, 0xFFFF))), y: uint32(max(y, 0))}
+	p := point{tag: tag, x: uint16(max(0, min(x, 0xFFFF))), y: uint32(max(y, 0))}
 	return ref, terminalGridRef(t.h, p, &ref) == 0
 }
 
@@ -357,10 +373,35 @@ func (t *Terminal) SetResizePullBack(v bool) {
 // RowText returns the text of row y of the viewport, and the column of
 // each of its runes.
 func (t *Terminal) RowText(y int) (text []rune, cols []int) {
+	return t.rowText(pointViewport, y)
+}
+
+// ScreenRowText returns the text of row y of the screen and its
+// scrollback, row 0 being the oldest, as RowText does of the viewport.
+func (t *Terminal) ScreenRowText(y int) (text []rune, cols []int) {
+	return t.rowText(pointScreen, y)
+}
+
+// RowWraps reports whether row y of the screen and its scrollback goes on
+// in the next row, as a long line the terminal wrapped.
+func (t *Terminal) RowWraps(y int) bool {
+	ref, found := t.ScreenCellAt(0, y)
+	if !found {
+		return false
+	}
+	var row uint64
+	if !ok(call(fnGridRefRow, uintptr(unsafe.Pointer(&ref)), uintptr(unsafe.Pointer(&row)))) {
+		return false
+	}
+	var w bool
+	return ok(call(fnRowGetData, uintptr(row), rowDataWrap, uintptr(unsafe.Pointer(&w)))) && w
+}
+
+func (t *Terminal) rowText(tag int32, y int) (text []rune, cols []int) {
 	c, _ := t.Size()
 	var buf [16]uint32
 	for x := range c {
-		ref, found := t.CellAt(x, y)
+		ref, found := t.cellAt(tag, x, y)
 		if !found {
 			break
 		}
@@ -406,6 +447,12 @@ func (t *Terminal) SetSelection(s *Selection) {
 	t.set(21, unsafe.Pointer(s))
 }
 
+// NewSelection returns the selection of the cells from start to end,
+// inclusive.
+func NewSelection(start, end GridRef) Selection {
+	return Selection{size: unsafe.Sizeof(Selection{}), start: start, end: end}
+}
+
 // SelectAll returns a selection of everything, scrollback included.
 func (t *Terminal) SelectAll() (Selection, bool) {
 	s := Selection{size: unsafe.Sizeof(Selection{})}
@@ -429,8 +476,15 @@ func (t *Terminal) SelectionText() (string, bool) {
 
 // Text returns the text of the screen and its scrollback, with
 // soft-wrapped lines joined and trailing spaces trimmed.
-func (t *Terminal) Text() string {
-	opts := formatterOptions{size: unsafe.Sizeof(formatterOptions{}), unwrap: true, trim: true}
+func (t *Terminal) Text() string { return t.text(true) }
+
+// Rows returns the text of each row of the screen and its scrollback, row
+// 0 being the oldest, with trailing spaces trimmed. The rows after the last
+// with text may be left out.
+func (t *Terminal) Rows() []string { return strings.Split(t.text(false), "\n") }
+
+func (t *Terminal) text(unwrap bool) string {
+	opts := formatterOptions{size: unsafe.Sizeof(formatterOptions{}), unwrap: unwrap, trim: true}
 	opts.extra.size = unsafe.Sizeof(opts.extra)
 	opts.extra.screen.size = unsafe.Sizeof(opts.extra.screen)
 	var f uintptr

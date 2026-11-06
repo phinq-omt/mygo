@@ -1074,6 +1074,16 @@ func (e *node) Submitted() bool {
 	return e.st.submitted
 }
 
+// SubmittedMods reports, as Submitted does, whether Enter was pressed in a
+// single-line text input, and the modifiers held with it, for Shift+Enter
+// to go back where Enter goes forward.
+func (e *node) SubmittedMods() (Modifiers, bool) {
+	if !e.Submitted() {
+		return 0, false
+	}
+	return e.st.submitMods, true
+}
+
 // scrollbarPress starts dragging the thumb of the scroll container under
 // the pointer when the press is on its scroll bar, or pages toward the
 // press on the bar's track.

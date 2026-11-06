@@ -4137,6 +4137,19 @@ func (_handle Element) Submitted() bool {
 	return _node.Submitted()
 }
 
+// SubmittedMods reports, as Submitted does, whether Enter was pressed in a
+// single-line text input, and the modifiers held with it, for Shift+Enter
+// to go back where Enter goes forward.
+func (_handle Element) SubmittedMods() (Modifiers, bool) {
+	_node := _handle.node()
+	if _node == nil {
+		return 0, false
+	}
+	_ctx := _node.c
+	_ = _ctx
+	return _node.SubmittedMods()
+}
+
 // TextAlign aligns the lines of text: Start, Center or End.
 func (_handle Element) TextAlign(a Align) Element {
 	_node := _handle.node()

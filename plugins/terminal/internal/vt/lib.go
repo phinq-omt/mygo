@@ -45,7 +45,7 @@ var (
 	fnGestureNew, fnGestureFree, fnGestureReset, fnGestureGet, fnGestureEventNew, fnGestureEventFree,
 	fnGestureEventSet, fnGestureEvent, fnSelectAll uintptr
 
-	fnGridRefHyperlinkURI, fnGridRefGraphemes, fnGridRefCell, fnTypeJSON, fnFormatterFormatAlloc, fnFormatterFree uintptr
+	fnGridRefHyperlinkURI, fnGridRefGraphemes, fnGridRefCell, fnGridRefRow, fnRowGetData, fnTypeJSON, fnFormatterFormatAlloc, fnFormatterFree uintptr
 
 	// Bound with registerFunc below: they take structs or floats.
 	fnTerminalScrollViewport, fnTerminalGridRef, fnMouseEventSetPosition, fnSelectionFormatAlloc, fnFormatterTerminalNew uintptr
@@ -134,6 +134,8 @@ var symbols = []struct {
 	{"ghostty_grid_ref_hyperlink_uri", &fnGridRefHyperlinkURI},
 	{"ghostty_grid_ref_graphemes", &fnGridRefGraphemes},
 	{"ghostty_grid_ref_cell", &fnGridRefCell},
+	{"ghostty_grid_ref_row", &fnGridRefRow},
+	{"ghostty_row_get", &fnRowGetData},
 	{"ghostty_type_json", &fnTypeJSON},
 	{"ghostty_formatter_terminal_new", &fnFormatterTerminalNew},
 	{"ghostty_formatter_format_alloc", &fnFormatterFormatAlloc},
@@ -305,7 +307,9 @@ var enums = []struct {
 	{"GhosttyStyleColorTag", "RGB", colorRGB},
 	{"GhosttySgrUnderline", "DASHED", UnderlineDashed},
 	{"GhosttyTerminalScrollViewportTag", "ROW", 3},
-	{"GhosttyPointTag", "VIEWPORT", 1},
+	{"GhosttyPointTag", "VIEWPORT", pointViewport},
+	{"GhosttyPointTag", "SCREEN", pointScreen},
+	{"GhosttyRowData", "WRAP", rowDataWrap},
 	{"GhosttyClipboardWriteResult", "UNSUPPORTED", 2},
 	{"GhosttySelectionGestureEventType", "DRAG", gestureDrag},
 }
