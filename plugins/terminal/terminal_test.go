@@ -3003,3 +3003,26 @@ func TestDropFiles(t *testing.T) {
 		t.Errorf("dropping in bracketed paste pasted %q, want %q", got, want)
 	}
 }
+
+// SelectedText is the selection's text, and "" with none.
+func TestSelectedText(t *testing.T) {
+	loadLib(t)
+	term, err := New(Options{Conn: newPipe()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	term.Feed([]byte("hello there\r\n"))
+	if s := term.SelectedText(); s != "" {
+		t.Errorf("with nothing selected, %q", s)
+	}
+	term.mu.Lock()
+	all, ok := term.term.SelectAll()
+	if ok {
+		term.term.SetSelection(&all)
+	}
+	term.mu.Unlock()
+	if s := term.SelectedText(); !strings.Contains(s, "hello there") {
+		t.Errorf("with all selected, %q", s)
+	}
+}

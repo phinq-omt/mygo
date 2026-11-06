@@ -229,3 +229,16 @@ func (t *Terminal) viewportMatches(spans []matchSpan, buf []vt.Selection, cols, 
 	}
 	return spans, buf
 }
+
+// SelectedText returns the text selected in the terminal, "" when nothing
+// is: what a find bar opening searches for, as Command-F takes the
+// selection in a Mac app.
+func (t *Terminal) SelectedText() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.term == nil {
+		return ""
+	}
+	s, _ := t.term.SelectionText()
+	return s
+}
