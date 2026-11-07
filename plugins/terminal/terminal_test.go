@@ -3026,3 +3026,52 @@ func TestSelectedText(t *testing.T) {
 		t.Errorf("with all selected, %q", s)
 	}
 }
+
+// TestLinkMenu: a secondary click on a link puts Options.LinkMenu's items at
+// the top of the context menu, which still has them, and the same link, when
+// an item is chosen; elsewhere the menu is as it was.
+func TestLinkMenu(t *testing.T) {
+	loadLib(t)
+	var links, chosen []string
+	term, err := New(Options{Conn: newPipe(), OpenLink: func(string) bool { return true },
+		LinkMenu: func(m *ui.Menu, link string) {
+			links = append(links, link)
+			if m.Item("Reveal").Chosen() {
+				chosen = append(chosen, link)
+			}
+		}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	term.Feed([]byte("see src/app.go:12 or https://x.org\r\nplain words"))
+	tt := ui.NewTester(func(c *ui.Context) { View(c, term).Fill().AutoFocus() }, 400, 200)
+	tt.Frame()
+
+	x, y := cellCenter(term, 6, 0)
+	tt.RightClickAt(x, y)
+	if got := strings.Join(tt.Menu(), ","); !strings.HasPrefix(got, "Reveal,-,Copy") {
+		t.Errorf("menu on a path = %q", got)
+	}
+	// The pointer moves off before the choice.
+	px, py := cellCenter(term, 2, 1)
+	tt.Move(px, py)
+	if err := tt.ChooseMenuItem("Reveal"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(chosen, []string{"src/app.go:12"}) {
+		t.Errorf("chose %q", chosen)
+	}
+
+	x, y = cellCenter(term, 24, 0)
+	tt.RightClickAt(x, y)
+	if got := links[len(links)-1]; got != "https://x.org" {
+		t.Errorf("menu on a URL got %q", got)
+	}
+
+	links = nil
+	tt.RightClickAt(px, py)
+	if got := strings.Join(tt.Menu(), ","); strings.Contains(got, "Reveal") || len(links) != 0 {
+		t.Errorf("menu on plain words = %q, LinkMenu got %q", got, links)
+	}
+}

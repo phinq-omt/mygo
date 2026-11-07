@@ -246,6 +246,12 @@ type Options struct {
 	// opens with the system (Context.OpenURL), and a path it leaves does
 	// nothing.
 	OpenLink func(link string) bool
+	// LinkMenu adds items at the top of the context menu, when the
+	// secondary click that opens it is on a link as Command+click finds
+	// one (OpenLink): a hyperlink, a URL or, with OpenLink set, a file
+	// path, as printed. It runs on the main thread, as the menu's build,
+	// which runs again in the frame after an item was chosen.
+	LinkMenu func(m *ui.Menu, link string)
 	// OnPaste sees a paste of the clipboard (ActionPaste's keys, a Paste
 	// menu item, a secondary click with RightClickPaste) before the
 	// program gets it, on the main thread, with every format the

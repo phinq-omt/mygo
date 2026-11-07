@@ -225,6 +225,10 @@ type view struct {
 	// does not open.
 	opening     string
 	openingPath bool
+	// menuLink is the link the last press was on, for Options.LinkMenu:
+	// the menu is built again after an item is chosen, when the pointer
+	// may be elsewhere.
+	menuLink string
 	// copying is the selection a release ended with Options.CopyOnSelect,
 	// and rightClick what a secondary click does, done once t.mu is
 	// released, as opening is.
@@ -548,8 +552,13 @@ func (v *view) menu(m *ui.Menu) {
 		text, selected = t.term.SelectionText()
 		alt = t.term.AltScreen()
 	}
+	link := v.menuLink
 	t.mu.Unlock()
 	tx := l10n.In(v.lang)
+	if add := t.opts.LinkMenu; add != nil && link != "" {
+		add(m, link)
+		m.Separator()
+	}
 	if v.menuItem(m, tx.Copy(), ActionCopy).Disabled(!selected || text == "").Chosen() {
 		v.services.WriteClipboard(text)
 		v.copied(text, CopyUser)
@@ -1036,6 +1045,12 @@ func (v *view) pointerEvent(ev ui.InputEvent) bool {
 	}
 	if v.scrollbarEvent(ev) {
 		return true
+	}
+	if ev.Kind == ui.InputPointerDown {
+		v.menuLink = ""
+		if t.opts.LinkMenu != nil {
+			v.menuLink, _, _ = v.linkAt(v.cellAt(ev.X, ev.Y))
+		}
 	}
 	// Command over a link: a hand, and a click opens it, before a
 	// program that takes the mouse sees it.

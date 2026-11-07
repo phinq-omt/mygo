@@ -310,6 +310,11 @@ term, err := terminal.New(terminal.Options{
   does without `OpenLink`. An app opens a remote shell's paths in a
   preview of its own this way, rather than the system opening them
   locally.
+- `LinkMenu` adds items at the top of the context menu when the secondary
+  click that opens it is on a link, as `OpenLink` would get it: an app
+  puts "Reveal in Finder" or "Copy Path" there for a printed path. It is
+  the link of the click, not of where the pointer is when an item is
+  chosen.
 - `OnPaste` sees a paste of the clipboard, by the keys, a Paste menu item
   or a secondary click, on the main thread, with every format the
   clipboard holds as a `transfer.Data`, and takes it by returning true:
