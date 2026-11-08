@@ -163,6 +163,9 @@ func (t *Terminal) ScreenRow(ref *GridRef) (int, bool) {
 
 // GhosttyPointTag's coordinate systems.
 const (
+	// pointActive is the screen's rows a program draws in, at the bottom
+	// whatever the viewport is scrolled to.
+	pointActive   = 0
 	pointViewport = 1
 	pointScreen   = 2
 )
