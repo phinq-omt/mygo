@@ -1060,6 +1060,28 @@ func (t *Terminal) Text() string {
 	return t.term.Text()
 }
 
+// ScreenText returns the text of the rows the screen shows, without the
+// scrollback above them: what a program draws there now, as an agent's line
+// that it is working. Each row is one line, its trailing blanks left out,
+// and the empty rows at the bottom too.
+func (t *Terminal) ScreenText() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.term == nil {
+		return ""
+	}
+	_, rows := t.term.Size()
+	lines := make([]string, 0, rows)
+	for y := range rows {
+		text, _ := t.term.ActiveRowText(y)
+		lines = append(lines, strings.TrimRight(string(text), " "))
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // Resize sets the size of the screen in cells, for a terminal no view
 // shows, as one a server keeps for a session while no window does: a view
 // sets the size of the terminal it shows.

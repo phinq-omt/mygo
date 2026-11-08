@@ -456,6 +456,10 @@ func (t *Terminal) SetResizePullBack(v bool) {
 // each of its runes.
 func (t *Terminal) RowText(y int) (text []rune, cols []int) { return t.rowText(pointViewport, y) }
 
+// ActiveRowText returns the text of row y of the rows a program draws in,
+// row 0 the top, wherever the viewport is scrolled.
+func (t *Terminal) ActiveRowText(y int) (text []rune, cols []int) { return t.rowText(pointActive, y) }
+
 // ScreenRowText returns the text of row y of the screen and its
 // scrollback, row 0 the oldest, as RowText does of the viewport.
 func (t *Terminal) ScreenRowText(y int) (text []rune, cols []int) { return t.rowText(pointScreen, y) }
