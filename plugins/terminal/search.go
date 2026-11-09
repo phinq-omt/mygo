@@ -28,6 +28,9 @@ type search struct {
 	// starts.
 	pick   bool
 	status SearchStatus
+	// other tells that the selected match is not the one the app shows
+	// now, which is in another terminal: it is drawn as any other match.
+	other bool
 }
 
 // searchBudget bounds what a frame spends going through the scrollback; a
@@ -105,6 +108,19 @@ func (t *Terminal) endSearch() {
 		t.find.s.Free()
 	}
 	t.find = search{}
+}
+
+// SetSearchCurrent tells whether this terminal has the match an app's
+// search across several terminals selected: when not, its selected match
+// is drawn as the others are, for one only to stand out.
+func (t *Terminal) SetSearchCurrent(current bool) {
+	t.mu.Lock()
+	changed := t.find.other == current
+	t.find.other = !current
+	t.mu.Unlock()
+	if changed {
+		t.redraw()
+	}
 }
 
 // SearchStatus returns how the search goes.
@@ -205,7 +221,7 @@ func (t *Terminal) viewportMatches(spans []matchSpan, buf []vt.Selection, cols, 
 	}
 	var sel [4]int
 	selOK := false
-	if m, ok := f.s.SelectedMatch(); ok {
+	if m, ok := f.s.SelectedMatch(); ok && !f.other {
 		sel, selOK = cells(&m)
 	}
 	for i := range buf {

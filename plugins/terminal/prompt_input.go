@@ -43,3 +43,13 @@ func (t *Terminal) ReplaceInput(line string) {
 	}
 	t.Paste(line)
 }
+
+// ReportsInput reports whether the shell tells what is typed at its prompt,
+// as the zsh integration does, and the terminal is not on the alternate
+// screen: whether PromptInput may have something to tell, now or once the
+// command running ends.
+func (t *Terminal) ReportsInput() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.term != nil && !t.term.AltScreen() && t.prompt.reports
+}
