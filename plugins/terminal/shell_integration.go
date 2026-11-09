@@ -1,8 +1,10 @@
 package terminal
 
 import (
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -70,8 +72,51 @@ _mygo_mark_prompt() {
   fi
   [[ $PS2 == *$'\e]133;'* ]] || PS2=$continuation$PS2$input
 }
+_mygo_encode() {
+  emulate -L zsh
+  local LC_ALL=C s=$1 c out= i
+  for (( i = 1; i <= ${#s}; i++ )); do
+    c=${s[i]}
+    if [[ $c == [A-Za-z0-9_.~/:=+@,-] ]]; then
+      out+=$c
+    else
+      out+=%${(l:2::0:)$(( [##16] #c ))}
+    fi
+  done
+  REPLY=$out
+}
 _mygo_command_start() {
-  printf '\e]133;C\a'
+  emulate -L zsh
+  local REPLY
+  # A line typed with a space first is one the user keeps out of history.
+  if [[ $1 == ' '* || ${#1} -gt $_mygo_input_max ]]; then
+    printf '\e]133;C\a'
+    return
+  fi
+  _mygo_encode "$1"
+  printf '\e]133;C;cmdline_url=%s\a' "$REPLY"
+}
+typeset -g _mygo_input=
+typeset -gi _mygo_input_max=2000
+_mygo_report_input() {
+  emulate -L zsh
+  local now="$CURSOR;$BUFFER" REPLY
+  [[ $now == "$_mygo_input" ]] && return
+  _mygo_input=$now
+  if (( ${#BUFFER} > _mygo_input_max )); then
+    print -rn -- $'\e]7733;input;-1;\a' >/dev/tty
+    return
+  fi
+  _mygo_encode "$BUFFER"
+  print -rn -- $'\e]7733;input;'"$CURSOR;$REPLY"$'\a' >/dev/tty
+}
+_mygo_line_init() {
+  _mygo_input=
+  _mygo_report_input
+}
+_mygo_clear_input() {
+  BUFFER=
+  CURSOR=0
 }
 _mygo_install_marks() {
   emulate -L zsh
@@ -79,6 +124,17 @@ _mygo_install_marks() {
   add-zsh-hook -d precmd _mygo_install_marks
   add-zsh-hook precmd _mygo_mark_prompt
   add-zsh-hook preexec _mygo_command_start
+  if autoload -Uz add-zle-hook-widget 2>/dev/null; then
+    zle -N _mygo_report_input
+    zle -N _mygo_line_init
+    zle -N _mygo_clear_input
+    add-zle-hook-widget line-init _mygo_line_init
+    add-zle-hook-widget line-pre-redraw _mygo_report_input
+    local m
+    for m in emacs viins vicmd; do
+      bindkey -M $m $'\e[7733~' _mygo_clear_input
+    done
+  fi
   _mygo_mark_prompt
 }
 typeset -ga precmd_functions
@@ -87,11 +143,43 @@ precmd_functions+=(_mygo_install_marks)
 
 // Track only OSC 133, across read boundaries. Other control strings are
 // opaque and OSC payloads are bounded; a TUI's text must not mark a prompt.
+// The command line a command starts with (133;C;cmdline_url=) and what is
+// typed at the prompt (the integration's 7733;input) may be longer.
 type promptTracker struct {
-	state    byte
-	body     []byte
-	length   int
-	atPrompt bool
+	state     byte
+	body      []byte
+	length    int
+	truncated bool
+	atPrompt  bool
+
+	// reports is whether the shell tells what is typed at its prompt:
+	// input and cursor, in characters, are what it last told.
+	reports bool
+	known   bool
+	input   string
+	cursor  int
+	// started are the command lines of commands that started, and ended
+	// the statuses of those that ended, since the terminal last took them.
+	started []string
+	ended   []int
+}
+
+// markLimit is how long an OSC 133 may be, and lineLimit the command
+// line or input marks, as the integration sends them encoded.
+const (
+	markLimit = 64
+	lineLimit = 8192
+)
+
+func (p *promptTracker) limit() int {
+	if b := p.body; bytesHasPrefix(b, "133;C;") || bytesHasPrefix(b, "7733;") {
+		return lineLimit
+	}
+	return markLimit
+}
+
+func bytesHasPrefix(b []byte, s string) bool {
+	return len(b) >= len(s) && string(b[:len(s)]) == s
 }
 
 func (p *promptTracker) feed(data []byte) {
@@ -117,8 +205,10 @@ func (p *promptTracker) feed(data []byte) {
 			case 0x1b:
 				p.state = 3
 			default:
-				if p.length <= 64 {
+				if len(p.body) < p.limit() {
 					p.body = append(p.body, b)
+				} else {
+					p.truncated = true
 				}
 			}
 		case 3:
@@ -146,7 +236,7 @@ func (p *promptTracker) escape(b byte) {
 	p.state = 0
 	switch b {
 	case ']':
-		p.state, p.length, p.body = 2, 0, p.body[:0]
+		p.state, p.length, p.body, p.truncated = 2, 0, p.body[:0], false
 	case 'P', '_', '^', 'X': // DCS, APC, PM, SOS
 		p.state = 4
 	case 'c': // RIS
@@ -157,17 +247,67 @@ func (p *promptTracker) escape(b byte) {
 }
 
 func (p *promptTracker) finish() {
-	if p.length > 64 {
+	if p.truncated {
 		return
 	}
-	mark, ok := strings.CutPrefix(string(p.body), "133;")
+	body := string(p.body)
+	if in, ok := strings.CutPrefix(body, "7733;input;"); ok {
+		p.reported(in)
+		return
+	}
+	mark, ok := strings.CutPrefix(body, "133;")
 	if !ok || mark == "" || len(mark) > 1 && mark[1] != ';' {
 		return
 	}
 	switch mark[0] {
 	case 'A', 'B', 'I', 'N', 'P':
 		p.atPrompt = true
-	case 'C', 'D':
+	case 'C':
 		p.atPrompt = false
+		p.input, p.cursor = "", 0
+		if line, ok := markParam(mark, "cmdline_url"); ok {
+			if s, err := url.PathUnescape(line); err == nil && strings.TrimSpace(s) != "" && len(p.started) < 16 {
+				p.started = append(p.started, s)
+			}
+		}
+	case 'D':
+		p.atPrompt = false
+		if len(mark) > 2 && len(p.ended) < 16 {
+			code, _, _ := strings.Cut(mark[2:], ";")
+			if n, err := strconv.Atoi(code); err == nil {
+				p.ended = append(p.ended, n)
+			}
+		}
 	}
+}
+
+// reported takes what the shell says is typed at its prompt:
+// "cursor;encoded input", or a cursor of -1 for input too long to say.
+func (p *promptTracker) reported(s string) {
+	cur, enc, ok := strings.Cut(s, ";")
+	n, err := strconv.Atoi(cur)
+	if !ok || err != nil {
+		return
+	}
+	p.reports = true
+	if n < 0 {
+		p.known, p.input, p.cursor = false, "", 0
+		return
+	}
+	text, err := url.PathUnescape(enc)
+	if err != nil {
+		return
+	}
+	p.known, p.input, p.cursor = true, text, min(n, len([]rune(text)))
+}
+
+// markParam returns the value of key in a mark's parameters, as
+// "C;key=value;other=…".
+func markParam(mark, key string) (string, bool) {
+	for _, kv := range strings.Split(mark, ";")[1:] {
+		if v, ok := strings.CutPrefix(kv, key+"="); ok {
+			return v, true
+		}
+	}
+	return "", false
 }

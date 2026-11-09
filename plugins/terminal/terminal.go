@@ -207,6 +207,13 @@ type Options struct {
 	OnExit   func(code int)
 	OnBell   func()
 	OnNotify func(title, body string)
+	// OnCommand and OnCommandEnd run on a goroutine of the terminal when
+	// the shell marks a command starting, with the line typed for it (OSC
+	// 133;C;cmdline_url=, which the zsh integration sends, as Ghostty's and
+	// kitty's do), and ending, with its status (OSC 133;D). A line typed
+	// with a space first, which the user keeps out of history, is not told.
+	OnCommand    func(line string)
+	OnCommandEnd func(code int)
 	// OnPasteStatus tells how a paste goes that a program reads itself
 	// (mode 5522, see PasteData), on a goroutine of the terminal: offered,
 	// then sending as the program reads, then sent; or not taken when the
@@ -594,6 +601,10 @@ type events struct {
 	title  bool
 	bells  int
 	notify [][2]string
+	// started and ended are the commands the shell marked starting, by
+	// their command lines, and ending, by their statuses.
+	started []string
+	ended   []int
 }
 
 // New makes a terminal running opts.Command, or connected to opts.Conn.
@@ -844,10 +855,13 @@ func (t *Terminal) write(p []byte) {
 	var ev events
 	var title string
 	if t.term != nil {
-		if t.opts.ShellIntegration {
-			t.prompt.feed(p)
-		}
+		// The marks are read whether or not the terminal starts the shell
+		// itself: a Conn's shell may make them too.
+		t.prompt.feed(p)
 		t.term.Write(p)
+		t.events.started = append(t.events.started, t.prompt.started...)
+		t.events.ended = append(t.events.ended, t.prompt.ended...)
+		t.prompt.started, t.prompt.ended = t.prompt.started[:0], t.prompt.ended[:0]
 		ev, t.events = t.events, events{}
 		if ev.title {
 			title = t.term.Title()
@@ -871,6 +885,16 @@ func (t *Terminal) fire(ev events, title string) {
 	for _, n := range ev.notify {
 		if o.OnNotify != nil {
 			o.OnNotify(n[0], n[1])
+		}
+	}
+	for _, line := range ev.started {
+		if o.OnCommand != nil {
+			o.OnCommand(line)
+		}
+	}
+	for _, code := range ev.ended {
+		if o.OnCommandEnd != nil {
+			o.OnCommandEnd(code)
 		}
 	}
 }
